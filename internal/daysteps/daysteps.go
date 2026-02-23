@@ -7,75 +7,75 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	sc "github.com/Yandex-Practicum/tracker/internal/spentcalories"
 )
 
-// Константы
 const (
-	stepLength = 0.65 // Средняя длина шага в метрах
-	mInKm      = 1000 // Метров в километре
+	stepLength = 0.65 // длина шага (м)
+	mInKm      = 1000 // м в км
 )
 
-// parsePackage парсит строку с данными о прогулке
-func parsePackage(data string) (steps int, duration time.Duration, err error) {
-	parts := strings.Split(strings.TrimSpace(data), ",")
+// parsePackage — парсит строку на шаги и длительность
+func parsePackage(data string) (int, time.Duration, error) {
+	spl := strings.Split(data, ",")
+	var step int
+	var err error
+	var duration time.Duration
 
-	if len(parts) != 2 {
-		err = errors.New("неверный формат данных")
-		return
+	if len(spl) == 2 {
+		// Парсим шаги
+		step, err = strconv.Atoi(spl[0])
+		if err != nil {
+			log.Println(err)
+			return 0, 0, err
+		}
+		if step <= 0 {
+			err := errors.New("Количество шагов должна быть больше нуля")
+			log.Println(err)
+			return 0, 0, err
+		}
+
+		// Парсим длительность
+		duration, err = time.ParseDuration(spl[1])
+		if err != nil {
+			log.Println(err)
+			return 0, 0, err
+		}
+		if duration <= 0 {
+			err := errors.New("Длительность должна быть больше нуля")
+			log.Println(err)
+			return 0, 0, err
+		}
+
+		return step, duration, nil
 	}
 
-	stepsStr := parts[0]
-	durationStr := parts[1]
-
-	steps, err = strconv.Atoi(stepsStr)
-	if err != nil || steps <= 0 {
-		err = errors.New("ошибка преобразования количества шагов")
-		return
-	}
-
-	duration, err = time.ParseDuration(durationStr)
-	if err != nil {
-		err = errors.New("невозможно распарсить длительность")
-		return
-	}
-
-	if duration <= 0 {
-		err = errors.New("недопустимая продолжительность прогулки")
-		return
-	}
-
-	return
+	err = errors.New("Неверный формат данных")
+	log.Println(err)
+	return 0, 0, err
 }
 
-// DayActionInfo выводит информацию о прогрессе пользователя
+// DayActionInfo — формирует отчёт о активности
 func DayActionInfo(data string, weight, height float64) string {
 	steps, duration, err := parsePackage(data)
 	if err != nil {
 		log.Println(err)
+		fmt.Println("Ошибка DayActionInfo: ", err)
 		return ""
 	}
 
-	if steps <= 0 {
-		return ""
-	}
+	// Расчёт дистанции в км
+	distance := float64(steps) * stepLength / mInKm
 
-	distanceMeters := float64(steps) * stepLength
-	distanceKm := distanceMeters / mInKm
-
-	calories, err := spentcalories.WalkingSpentCalories(steps, weight, height, duration)
+	// Расчёт сожжённых калорий
+	wspent, err := sc.WalkingSpentCalories(steps, weight, height, duration)
 	if err != nil {
 		log.Println(err)
+		fmt.Println("Ошибка: ", err)
 		return ""
 	}
 
-	result := fmt.Sprintf(
-		"Количество шагов: %d.\n"+
-			"Дистанция составила %.2f км.\n"+
-			"Вы сожгли %.2f ккал.\n",
-		steps,
-		distanceKm,
-		calories,
-	)
-
-	return result
+	// Форматирование итогового сообщения
+	return fmt.Sprintf("Количество шагов: %d.\nДистанция составила %.2f км.\nВы сожгли %.2f ккал.\n", steps, distance, wspent)
 }
